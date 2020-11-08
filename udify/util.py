@@ -152,6 +152,25 @@ def predict_model_with_archive(predictor: str, params: Params, archive: str,
                               has_dataset_reader=True)
     manager.run()
 
+def get_file_iface_predictor_with_archive(predictor: str, params: Params, archive: str, batch_size: int = 1):
+    cuda_device = params["trainer"]["cuda_device"]
+    
+    check_for_gpu(cuda_device)
+    archive = load_archive(archive,
+                           cuda_device=cuda_device)
+    
+    predictor = Predictor.from_archive(archive, predictor)
+
+    def file_iface_predictor(input_file, output_file):
+
+        manager = _PredictManager(predictor,
+                              input_file,
+                              output_file,
+                              batch_size,
+                              print_to_console=False,
+                              has_dataset_reader=True)
+        manager.run()
+    return file_iface_predictor
 
 def predict_and_evaluate_model_with_archive(predictor: str, params: Params, archive: str, gold_file: str,
                                pred_file: str, output_file: str, segment_file: str = None, batch_size: int = 1):

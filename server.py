@@ -1,4 +1,5 @@
 import os
+import sys
 import shutil
 import logging
 import argparse
@@ -11,23 +12,29 @@ from allennlp.models.archival import archive_model
 
 from udify import util
 
+from flask import Flask, request, jsonify
+import tempfile
+
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
         level=logging.ERROR)
 logger = logging.getLogger(__name__)
 
 parser = argparse.ArgumentParser()
-parser.add_argument("archive", type=str, help="The archive file")
-parser.add_argument("input_file", type=str, help="The input file to predict")
-parser.add_argument("pred_file", type=str, help="The output prediction file")
+parser.add_argument("--port", default=8888, type=int, help="The port to listen")
 
 args = parser.parse_args()
 
+archive_path = "./udify-model.tar.gz"
+if not os.path.exists(archive_path):
+    print("put archive: ", archive_path)
+    sys.exit(1)
+
 import_submodules("udify")
 
-archive_dir = Path(args.archive).resolve().parent
+archive_dir = Path(archive_path).resolve().parent
 
 if not os.path.isfile(archive_dir / "weights.th"):
-    with tarfile.open(args.archive) as tar:
+    with tarfile.open(archive_path) as tar:
         print("extracting model archive")
         tar.extractall(archive_dir)
 
@@ -41,4 +48,27 @@ params = util.merge_configs(configs)
 
 predictor = "udify_text_predictor"
 
-util.predict_model_with_archive(predictor, params, archive_dir, args.input_file, args.pred_file)
+print("loading model")
+predictor = util.get_file_iface_predictor_with_archive(predictor, params, archive_dir)
+
+#start server
+app = Flask(__name__)
+@app.route('/', methods=['POST'])
+def post_json():
+    json = request.get_json()
+    input_text = json['text']
+    temp_input = tempfile.NamedTemporaryFile()
+    fp = open(temp_input.name, 'w')
+    fp.write(input_text)
+    fp.close()
+    temp_output = tempfile.NamedTemporaryFile()
+    predictor(temp_input.name, temp_output.name)
+    fp = open(temp_output.name, 'r')
+    result = fp.read()
+    fp.close()
+    temp_input.close()
+    temp_output.close()
+    return jsonify(result)
+
+print("starting server")
+app.run(port=args.port)
