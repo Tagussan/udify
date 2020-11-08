@@ -110,3 +110,10 @@ venv.bak/
 /logs/
 /tmp/
 notebooks/bertviz/
+
+# Ignore extracted model
+*.tar.gz
+*.th
+config.json
+input.txt
+vocabulary
